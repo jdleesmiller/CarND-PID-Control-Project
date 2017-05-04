@@ -28,20 +28,19 @@ public:
   // Do we think the car has crashed?
   bool crashed;
 
+  // How long should the simulator run for before being declared done?
+  double max_runtime;
+  bool done;
+
   /*
   * Constructor
   */
-  PID();
-
-  /*
-  * Destructor.
-  */
-  virtual ~PID();
+  PID(double Kp, double Ki, double Kd, double t_max);
 
   /*
   * Initialize PID.
   */
-  void Init(double Kp, double Ki, double Kd);
+  void Init();
 
   /*
   * Update the PID error variables given cross track error.

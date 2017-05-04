@@ -4,8 +4,16 @@
 #include "PID.h"
 #include <math.h>
 
+#include <sysexits.h>
+
 // for convenience
 using json = nlohmann::json;
+
+// Use this code when closing the socket after we detect that the car has
+// crashed; this lets the server know that it was closed intentionally, rather
+// than due to a network / simulator crashing problem.
+const int CAR_CRASHED_CODE = 2000;
+const int MAX_RUNTIME_CODE = 2001;
 
 // For converting back and forth between radians and degrees.
 constexpr double pi() { return M_PI; }
@@ -28,12 +36,30 @@ std::string hasData(std::string s) {
   return "";
 }
 
-int main()
+int main(int argc, char **argv)
 {
   uWS::Hub h;
-  PID pid;
+  bool reset = false;
 
-  h.onMessage([&pid](uWS::WebSocket<uWS::SERVER> ws, char *data, size_t length, uWS::OpCode opCode) {
+  double Kp;
+  double Ki;
+  double Kd;
+  double max_runtime;
+  if (argc == 5) {
+    Kp = atof(argv[1]);
+    Ki = atof(argv[2]);
+    Kd = atof(argv[3]);
+    max_runtime = atof(argv[4]);
+  } else {
+    Kp = 0.1;
+    Ki = 0.0025;
+    Kd = 0.01;
+    max_runtime = 3600;
+  }
+  PID pid(Kp, Ki, Kd, max_runtime);
+
+  h.onMessage([&reset, &pid](uWS::WebSocket<uWS::SERVER> ws, char *data, size_t length, uWS::OpCode opCode) {
+    std::cout << "ON MESG" << std::endl;
     // "42" at the start of the message means there's a websocket message event.
     // The 4 signifies a websocket message
     // The 2 signifies a websocket event
@@ -44,6 +70,14 @@ int main()
         auto j = json::parse(s);
         std::string event = j[0].get<std::string>();
         if (event == "telemetry") {
+          // Make sure we've reset the simulator once on this run.
+          if (!reset) {
+            std::string reset_msg = "42[\"reset\", {}]";
+            ws.send(reset_msg.data(), reset_msg.length(), uWS::OpCode::TEXT);
+            reset = true;
+            return;
+          }
+
           // j[1] is the data JSON object
           double cte = std::stod(j[1]["cte"].get<std::string>());
           double speed = std::stod(j[1]["speed"].get<std::string>());
@@ -52,12 +86,18 @@ int main()
           // Update the PID controller.
           pid.Update(cte, speed, angle);
 
-          // If the controller thinks it has crashed the car, reset the
-          // simulator. TODO: we want to try a new set of parameters at this
-          // point. We will get a new 'connected' event.
+          // If the controller thinks it has crashed the car, terminate the
+          // simulator.
           if (pid.crashed) {
-            std::string reset_msg = "42[\"reset\", {}]";
-            ws.send(reset_msg.data(), reset_msg.length(), uWS::OpCode::TEXT);
+            std::cout << "CRASHED" << std::endl;
+            ws.close(CAR_CRASHED_CODE);
+            return;
+          }
+
+          // If we've run all the way to the deadline, stop.
+          if (pid.done) {
+            std::cout << "DONE" << std::endl;
+            ws.close(MAX_RUNTIME_CODE);
             return;
           }
 
@@ -102,12 +142,23 @@ int main()
   h.onConnection(
     [&h, &pid](uWS::WebSocket<uWS::SERVER> ws, uWS::HttpRequest req) {
     std::cout << "Connected!!!" << std::endl;
-    pid.Init(0.1, 0.0025, 0.01);
+    pid.Init();
   });
 
-  h.onDisconnection([&h](uWS::WebSocket<uWS::SERVER> ws, int code, char *message, size_t length) {
-    ws.close();
-    std::cout << "Disconnected" << std::endl;
+  h.onDisconnection([](uWS::WebSocket<uWS::SERVER> ws, int code, char *message, size_t length) {
+    switch (code) {
+      case CAR_CRASHED_CODE:
+        // The car crashed; let the caller know.
+        exit(1);
+      case MAX_RUNTIME_CODE:
+        // The simulator ran until our deadline; that's a success.
+        exit(EX_OK);
+      default:
+        // If the simulator exits, we seem to get code 1006 or 0.
+        std::cout << "Disconnected: code=" << code << ":" <<
+          std::string(message, length) << std::endl;
+        exit(EX_UNAVAILABLE);
+    }
   });
 
   int port = 4567;

@@ -15,16 +15,12 @@ const double WARMUP = 5;
 const double MIN_SPEED = 0.1;
 
 // If car has absolute CTE larger than this, in meters, assume it has crashed.
-const double MAX_CTE = 5;
+const double MAX_CTE = 0.5;
 
-PID::PID() {}
+PID::PID(double Kp, double Ki, double Kd, double max_runtime)
+  : Kp(Kp), Ki(Ki), Kd(Kd), max_runtime(max_runtime) { }
 
-PID::~PID() {}
-
-void PID::Init(double Kp, double Ki, double Kd) {
-  this->Kp = Kp;
-  this->Ki = Ki;
-  this->Kd = Kd;
+void PID::Init() {
   p_error = 0;
   i_error = 0;
   d_error = 0;
@@ -45,6 +41,9 @@ void PID::Update(double cte, double speed, double angle) {
   if (runtime > WARMUP) {
     if (fabs(cte) > MAX_CTE || speed < MIN_SPEED) {
       crashed = true;
+    }
+    if (runtime > max_runtime) {
+      done = true;
     }
   }
 
