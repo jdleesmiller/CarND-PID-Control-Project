@@ -1,6 +1,8 @@
 #ifndef PID_H
 #define PID_H
 
+#include <chrono>
+
 class PID {
 public:
   /*
@@ -16,6 +18,9 @@ public:
   double Kp;
   double Ki;
   double Kd;
+
+  // Time of last update, or time of Init on first measurement.
+  std::chrono::steady_clock::time_point t;
 
   /*
   * Constructor
@@ -35,7 +40,7 @@ public:
   /*
   * Update the PID error variables given cross track error.
   */
-  void UpdateError(double cte, double dt);
+  void UpdateError(double cte);
 
   /*
   * Calculate the total PID error.
