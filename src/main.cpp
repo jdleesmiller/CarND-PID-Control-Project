@@ -4,6 +4,8 @@
 #include "PID.h"
 #include <math.h>
 
+#include <chrono>
+
 // for convenience
 using json = nlohmann::json;
 
@@ -31,11 +33,12 @@ std::string hasData(std::string s) {
 int main()
 {
   uWS::Hub h;
+  std::chrono::steady_clock::time_point t;
 
   PID pid;
-  // TODO: Initialize the pid variable.
+  pid.Init(0.1, 0.0025, 0.01);
 
-  h.onMessage([&pid](uWS::WebSocket<uWS::SERVER> ws, char *data, size_t length, uWS::OpCode opCode) {
+  h.onMessage([&pid, &t](uWS::WebSocket<uWS::SERVER> ws, char *data, size_t length, uWS::OpCode opCode) {
     // "42" at the start of the message means there's a websocket message event.
     // The 4 signifies a websocket message
     // The 2 signifies a websocket event
@@ -50,14 +53,26 @@ int main()
           double cte = std::stod(j[1]["cte"].get<std::string>());
           double speed = std::stod(j[1]["speed"].get<std::string>());
           double angle = std::stod(j[1]["steering_angle"].get<std::string>());
-          double steer_value;
+
+          auto new_t = std::chrono::steady_clock::now();
+          std::chrono::duration<double> dt = new_t - t;
+          t = new_t;
+
+          pid.UpdateError(cte, dt.count());
+
+          double steer_value = pid.TotalError();
+          if (steer_value < -1) {
+            steer_value = -1;
+          }
+          if (steer_value > 1) {
+            steer_value = 1;
+          }
+
           /*
-          * TODO: Calcuate steering value here, remember the steering value is
-          * [-1, 1].
-          * NOTE: Feel free to play around with the throttle and speed. Maybe use
+          * TODO: Feel free to play around with the throttle and speed. Maybe use
           * another PID controller to control the speed!
           */
-          
+
           // DEBUG
           std::cout << "CTE: " << cte << " Steering Value: " << steer_value << std::endl;
 
@@ -65,7 +80,6 @@ int main()
           msgJson["steering_angle"] = steer_value;
           msgJson["throttle"] = 0.3;
           auto msg = "42[\"steer\"," + msgJson.dump() + "]";
-          std::cout << msg << std::endl;
           ws.send(msg.data(), msg.length(), uWS::OpCode::TEXT);
         }
       } else {
@@ -91,8 +105,10 @@ int main()
     }
   });
 
-  h.onConnection([&h](uWS::WebSocket<uWS::SERVER> ws, uWS::HttpRequest req) {
+  h.onConnection(
+    [&h, &t](uWS::WebSocket<uWS::SERVER> ws, uWS::HttpRequest req) {
     std::cout << "Connected!!!" << std::endl;
+    t = std::chrono::steady_clock::now();
   });
 
   h.onDisconnection([&h](uWS::WebSocket<uWS::SERVER> ws, int code, char *message, size_t length) {
