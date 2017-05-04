@@ -49,8 +49,17 @@ int main()
           double speed = std::stod(j[1]["speed"].get<std::string>());
           double angle = std::stod(j[1]["steering_angle"].get<std::string>());
 
-          pid.UpdateError(cte);
-          double steer_value = pid.TotalError();
+          // Update the PID controller.
+          pid.Update(cte, speed, angle);
+
+          // If the controller thinks it has crashed the car, reset the
+          // simulator. TODO: we want to try a new set of parameters at this
+          // point. We will get a new 'connected' event.
+          if (pid.crashed) {
+            std::string reset_msg = "42[\"reset\", {}]";
+            ws.send(reset_msg.data(), reset_msg.length(), uWS::OpCode::TEXT);
+            return;
+          }
 
           /*
           * TODO: Feel free to play around with the throttle and speed. Maybe use
@@ -58,6 +67,7 @@ int main()
           */
 
           // DEBUG
+          double steer_value = pid.SteeringAngle();
           std::cout << "CTE: " << cte << " Steering Value: " << steer_value << std::endl;
 
           json msgJson;

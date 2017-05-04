@@ -19,8 +19,14 @@ public:
   double Ki;
   double Kd;
 
-  // Time of last update, or time of Init on first measurement.
+  // Time of last Init.
+  std::chrono::steady_clock::time_point t_init;
+
+  // Time of last update, or time of last Init on first measurement.
   std::chrono::steady_clock::time_point t;
+
+  // Do we think the car has crashed?
+  bool crashed;
 
   /*
   * Constructor
@@ -40,12 +46,12 @@ public:
   /*
   * Update the PID error variables given cross track error.
   */
-  void UpdateError(double cte);
+  void Update(double cte, double speed, double angle);
 
   /*
-  * Calculate the total PID error.
+  * Calculate the steering angle control output.
   */
-  double TotalError();
+  double SteeringAngle();
 };
 
 #endif /* PID_H */
