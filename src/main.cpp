@@ -40,26 +40,30 @@ int main(int argc, char **argv)
 {
   uWS::Hub h;
   bool reset = false;
-
+  bool tuning;
   double Kp;
   double Ki;
   double Kd;
   double max_runtime;
+
   if (argc == 5) {
+    tuning = true;
     Kp = atof(argv[1]);
     Ki = atof(argv[2]);
     Kd = atof(argv[3]);
     max_runtime = atof(argv[4]);
   } else {
+    tuning = false;
     Kp = 0.1;
     Ki = 0.0025;
     Kd = 0.01;
     max_runtime = 3600;
   }
-  PID pid(Kp, Ki, Kd, max_runtime);
+  PID pid(tuning, Kp, Ki, Kd);
 
-  h.onMessage([&reset, &pid](uWS::WebSocket<uWS::SERVER> ws, char *data, size_t length, uWS::OpCode opCode) {
-    std::cout << "ON MESG" << std::endl;
+  h.onMessage([&reset, max_runtime, &pid](
+    uWS::WebSocket<uWS::SERVER> ws, char *data, size_t length,
+    uWS::OpCode opCode) {
     // "42" at the start of the message means there's a websocket message event.
     // The 4 signifies a websocket message
     // The 2 signifies a websocket event
@@ -71,7 +75,7 @@ int main(int argc, char **argv)
         std::string event = j[0].get<std::string>();
         if (event == "telemetry") {
           // Make sure we've reset the simulator once on this run.
-          if (!reset) {
+          if (pid.tuning && !reset) {
             std::string reset_msg = "42[\"reset\", {}]";
             ws.send(reset_msg.data(), reset_msg.length(), uWS::OpCode::TEXT);
             reset = true;
@@ -88,15 +92,15 @@ int main(int argc, char **argv)
 
           // If the controller thinks it has crashed the car, terminate the
           // simulator.
-          if (pid.crashed) {
-            std::cout << "CRASHED" << std::endl;
+          if (pid.tuning && pid.crashed) {
+            std::cout << pid << std::endl;
             ws.close(CAR_CRASHED_CODE);
             return;
           }
 
           // If we've run all the way to the deadline, stop.
-          if (pid.done) {
-            std::cout << "DONE" << std::endl;
+          if (pid.tuning && pid.runtime > max_runtime) {
+            std::cout << pid << std::endl;
             ws.close(MAX_RUNTIME_CODE);
             return;
           }
@@ -106,9 +110,12 @@ int main(int argc, char **argv)
           * another PID controller to control the speed!
           */
 
-          // DEBUG
           double steer_value = pid.SteeringAngle();
-          std::cout << "CTE: " << cte << " Steering Value: " << steer_value << std::endl;
+
+          if (!pid.tuning) {
+            std::cout << "CTE: " << cte << " Steering Value: " << steer_value
+              << " Speed: " << speed << std::endl;
+          }
 
           json msgJson;
           msgJson["steering_angle"] = steer_value;
@@ -141,7 +148,9 @@ int main(int argc, char **argv)
 
   h.onConnection(
     [&h, &pid](uWS::WebSocket<uWS::SERVER> ws, uWS::HttpRequest req) {
-    std::cout << "Connected!!!" << std::endl;
+    if (!pid.tuning) {
+      std::cout << "Connected!!!" << std::endl;
+    }
     pid.Init();
   });
 
@@ -155,7 +164,7 @@ int main(int argc, char **argv)
         exit(EX_OK);
       default:
         // If the simulator exits, we seem to get code 1006 or 0.
-        std::cout << "Disconnected: code=" << code << ":" <<
+        std::cerr << "Disconnected: code=" << code << ":" <<
           std::string(message, length) << std::endl;
         exit(EX_UNAVAILABLE);
     }
@@ -164,7 +173,9 @@ int main(int argc, char **argv)
   int port = 4567;
   if (h.listen(port))
   {
-    std::cout << "Listening to port " << port << std::endl;
+    if (!pid.tuning) {
+      std::cout << "Listening to port " << port << std::endl;
+    }
   }
   else
   {

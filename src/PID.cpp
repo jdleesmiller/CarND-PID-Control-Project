@@ -10,15 +10,17 @@ const double MAX_CONTROL = 1;
 // Wait this long before recording stats, in seconds.
 const double WARMUP = 5;
 
-// TODO what are the units of speed?
-// If car is going slower than this, assume it has crashed.
-const double MIN_SPEED = 0.1;
+// If car is going slower than this, in miles per hour, assume it has crashed.
+const double MIN_SPEED = 0.5;
 
 // If car has absolute CTE larger than this, in meters, assume it has crashed.
-const double MAX_CTE = 0.5;
+const double MAX_CTE = 5;
 
-PID::PID(double Kp, double Ki, double Kd, double max_runtime)
-  : Kp(Kp), Ki(Ki), Kd(Kd), max_runtime(max_runtime) { }
+// 1609.34m / mile * 1h / 3600s = x (m / s) / (miles / h).
+const double MPH_TO_METERS_PER_SECOND = (1609.34 / 3600.0);
+
+PID::PID(bool tuning, double Kp, double Ki, double Kd)
+  : tuning(tuning), Kp(Kp), Ki(Ki), Kd(Kd) { }
 
 void PID::Init() {
   p_error = 0;
@@ -27,6 +29,10 @@ void PID::Init() {
   t_init = std::chrono::steady_clock::now();
   t = t_init;
   crashed = false;
+  runtime = 0;
+  previous_speed = 0;
+  distance = 0;
+  total_absolute_cte = 0;
 }
 
 void PID::Update(double cte, double speed, double angle) {
@@ -35,17 +41,20 @@ void PID::Update(double cte, double speed, double angle) {
   double dt = dt_duration.count();
   t = new_t;
 
-  // Detect crashes.
-  std::chrono::duration<double> runtime_duration = new_t - t_init;
-  double runtime = runtime_duration.count();
-  if (runtime > WARMUP) {
-    if (fabs(cte) > MAX_CTE || speed < MIN_SPEED) {
+  if (tuning) {
+    std::chrono::duration<double> runtime_duration = new_t - t_init;
+    runtime = runtime_duration.count();
+    if (runtime > WARMUP && (fabs(cte) > MAX_CTE || speed < MIN_SPEED)) {
       crashed = true;
     }
-    if (runtime > max_runtime) {
-      done = true;
-    }
+
+    double average_speed = (speed + previous_speed) / 2;
+    distance += average_speed * dt * MPH_TO_METERS_PER_SECOND;
+    previous_speed = speed;
+
+    total_absolute_cte += fabs(cte);
   }
+
 
   // Update error terms.
   d_error = (cte - p_error) / dt;
@@ -62,4 +71,11 @@ double PID::SteeringAngle() {
     control = MIN_CONTROL;
   }
   return control;
+}
+
+std::ostream &operator<<(std::ostream &os, const PID &pid) {
+  os << "{\"runtime\":" << pid.runtime
+    << ", \"distance\":" << pid.distance
+    << ", \"total_absolute_cte\":" << pid.total_absolute_cte << "}";
+  return os;
 }

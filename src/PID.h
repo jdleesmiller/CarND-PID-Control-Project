@@ -2,6 +2,7 @@
 #define PID_H
 
 #include <chrono>
+#include <iostream>
 
 class PID {
 public:
@@ -15,6 +16,7 @@ public:
   /*
   * Coefficients
   */
+  bool tuning;
   double Kp;
   double Ki;
   double Kd;
@@ -25,17 +27,25 @@ public:
   // Time of last update, or time of last Init on first measurement.
   std::chrono::steady_clock::time_point t;
 
-  // Do we think the car has crashed?
+  // When tuning, do we think the car has crashed?
   bool crashed;
 
-  // How long should the simulator run for before being declared done?
-  double max_runtime;
-  bool done;
+  // When tuning, the elapsed time from init to the last update, in seconds.
+  double runtime;
+
+  // When tuning, the measured speed in the previous update, in miles per hour.
+  double previous_speed;
+
+  // When tuning, estimate of total distance driven in meters.
+  double distance;
+
+  // When tuning, sum of absolute CTE over a whole run, in meters.
+  double total_absolute_cte;
 
   /*
   * Constructor
   */
-  PID(double Kp, double Ki, double Kd, double t_max);
+  PID(bool tuning, double Kp, double Ki, double Kd);
 
   /*
   * Initialize PID.
@@ -52,5 +62,10 @@ public:
   */
   double SteeringAngle();
 };
+
+/*
+* Print the key metrics for the controller; used for tuning.
+*/
+std::ostream &operator<<(std::ostream &os, const PID &pid);
 
 #endif /* PID_H */
