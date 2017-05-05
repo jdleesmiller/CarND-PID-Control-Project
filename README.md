@@ -7,6 +7,8 @@ Self-Driving Car Engineer Nanodegree Program
 
 - To get dt, does not seem to be in message but can use a monotonic clock.
 
+- `data/tune_grid_60s_1.csv`: first grid; run for 30s; measured average speed and i_error, but i_error is not very informative, and average speed as measured was an exponential moving average so only considered speed at the end
+
 ## Dependencies
 
 * cmake >= 3.5
