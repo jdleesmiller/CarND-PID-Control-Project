@@ -1,7 +1,11 @@
+# frozen_string_literal: true
+
 require 'csv'
 require 'English'
 require 'json'
 require 'tmpdir'
+
+require 'cross_entropy'
 
 def run(*args, **options)
   Dir.mktmpdir do |tmp|
@@ -22,27 +26,72 @@ def run(*args, **options)
   end
 end
 
+def run_and_log(csv, kp, ki, kd, max_runtime)
+  status, out, _err = run(kp, ki, kd, max_runtime)
+  if [0, 1].member?(status)
+    crashed = status == 1
+    stats = JSON.parse(out)
+    csv << [
+      kp, ki, kd,
+      crashed,
+      stats['runtime'], stats['distance'], stats['total_absolute_cte']
+    ]
+    stats
+  else
+    # The run failed.
+    csv << [kp, ki, kd]
+    nil
+  end
+end
+
 def grid(max_runtime)
   CSV(STDOUT) do |csv|
     csv << %w(kp ki kd crashed runtime distance total_absolute_cte)
     ks = (0..4).map { |k| k / 20.0 }
     ks.product(ks, ks).each do |kp, ki, kd|
-      status, out, _err = run(kp, ki, kd, max_runtime)
-      if [0, 1].member?(status)
-        crashed = status == 1
-        stats = JSON.parse(out)
-        csv << [
-          kp, ki, kd,
-          crashed,
-          stats['runtime'], stats['distance'], stats['total_absolute_cte']
-        ]
-      else
-        # The run failed.
-        csv << [kp, ki, kd]
-      end
+      run_and_log(csv, kp, ki, kd, max_runtime)
     end
   end
 end
 
-grid(60)
+# grid(60)
 
+def cross_entropy_search(max_runtime)
+  # Our initial guess at the optimal solution.
+  # This is just a guess, so we give it a large standard deviation.
+  ks = NArray[0.0, 0.0, 0.0]
+  ks_stddev = NArray[3.0, 3.0, 3.0]
+
+  # Set up the problem. These are the CEM parameters.
+  problem = CrossEntropy::ContinuousProblem.new(ks, ks_stddev)
+  problem.num_samples = 60
+  problem.num_elite = 6
+  problem.max_iters = 20
+
+  CSV(STDOUT) do |csv|
+    csv << %w(kp ki kd crashed runtime distance total_absolute_cte)
+
+    # Objective function.
+    problem.to_score_sample do |k|
+      k = k.to_a.map { |x| Math.exp(x) }
+      stats = run_and_log(csv, *k, max_runtime)
+      if stats
+        -stats['distance']
+      else
+        Float::INFINITY # simulator crashed; bad luck
+      end
+    end
+
+    # Log the results
+    problem.to_update do |new_mean, new_stddev|
+      STDERR.puts new_mean.inspect
+      STDERR.puts new_stddev.inspect
+      [new_mean, new_stddev]
+    end
+
+    problem.solve
+    STDERR.puts problems.param_mean.inspect
+  end
+end
+
+cross_entropy_search(120)

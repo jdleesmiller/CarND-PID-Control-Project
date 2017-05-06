@@ -11,7 +11,7 @@ const double MAX_CONTROL = 1;
 const double WARMUP = 5;
 
 // If car is going slower than this, in miles per hour, assume it has crashed.
-const double MIN_SPEED = 0.5;
+const double MIN_SPEED = 5;
 
 // If car has absolute CTE larger than this, in meters, assume it has crashed.
 const double MAX_CTE = 5;
