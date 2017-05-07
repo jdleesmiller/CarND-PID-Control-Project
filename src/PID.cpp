@@ -19,8 +19,8 @@ const double MAX_CTE = 5;
 // 1609.34m / mile * 1h / 3600s = x (m / s) / (miles / h).
 const double MPH_TO_METERS_PER_SECOND = (1609.34 / 3600.0);
 
-PID::PID(bool tuning, double Kp, double Ki, double Kd)
-  : tuning(tuning), Kp(Kp), Ki(Ki), Kd(Kd) { }
+PID::PID(bool tuning, double Kp, double Ki, double Kd, double max_throttle)
+  : tuning(tuning), Kp(Kp), Ki(Ki), Kd(Kd), max_throttle(max_throttle) { }
 
 void PID::Init() {
   p_error = 0;

@@ -44,22 +44,25 @@ int main(int argc, char **argv)
   double Kp;
   double Ki;
   double Kd;
+  double max_throttle;
   double max_runtime;
 
-  if (argc == 5) {
+  if (argc == 6) {
     tuning = true;
     Kp = atof(argv[1]);
     Ki = atof(argv[2]);
     Kd = atof(argv[3]);
-    max_runtime = atof(argv[4]);
+    max_throttle = atof(argv[4]);
+    max_runtime = atof(argv[5]);
   } else {
     tuning = false;
     Kp = 0.1;
     Ki = 0.0025;
     Kd = 0.01;
+    max_throttle = 0.3;
     max_runtime = 3600;
   }
-  PID pid(tuning, Kp, Ki, Kd);
+  PID pid(tuning, Kp, Ki, Kd, max_throttle);
 
   h.onMessage([&reset, max_runtime, &pid](
     uWS::WebSocket<uWS::SERVER> ws, char *data, size_t length,
@@ -119,7 +122,7 @@ int main(int argc, char **argv)
 
           json msgJson;
           msgJson["steering_angle"] = steer_value;
-          msgJson["throttle"] = 0.3;
+          msgJson["throttle"] = pid.max_throttle;
           auto msg = "42[\"steer\"," + msgJson.dump() + "]";
           ws.send(msg.data(), msg.length(), uWS::OpCode::TEXT);
         }

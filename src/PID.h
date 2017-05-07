@@ -20,6 +20,7 @@ public:
   double Kp;
   double Ki;
   double Kd;
+  double max_throttle;
 
   // Time of last Init.
   std::chrono::steady_clock::time_point t_init;
@@ -45,7 +46,7 @@ public:
   /*
   * Constructor
   */
-  PID(bool tuning, double Kp, double Ki, double Kd);
+  PID(bool tuning, double Kp, double Ki, double Kd, double max_throttle);
 
   /*
   * Initialize PID.
