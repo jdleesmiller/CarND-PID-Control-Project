@@ -296,6 +296,9 @@ NArray.float(4):
 NArray.float(4):
 [ 0.0679396, 0.0362308, 0.0243165, 0.0149663 ]
 
+tune_twiddle_8.csv, tune_twiddle_9.csv:
+Two runs with twiddle. Interesting that they both found different solutions, and they are quite different to the CEM solutions.
+
 ## Dependencies
 
 * cmake >= 3.5

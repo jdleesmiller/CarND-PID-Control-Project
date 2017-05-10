@@ -98,4 +98,34 @@ def cross_entropy_search(max_runtime)
   end
 end
 
-cross_entropy_search(60)
+# cross_entropy_search(60)
+
+def twiddle(params, deltas, max_runtime, tolerance)
+  param_indexes = 0...(params.size)
+  CSV(STDOUT) do |csv|
+    csv << %w(kp ki kd max_throttle crashed runtime distance total_absolute_cte)
+    best_score = -run_and_log(csv, *params, max_runtime)['distance']
+    while deltas.sum > tolerance
+      param_indexes.each do |i|
+        params[i] += deltas[i]
+        score = -run_and_log(csv, *params, max_runtime)['distance']
+        if score < best_score
+          best_score = score
+          deltas[i] *= 1.1
+        else
+          params[i] -= 2 * deltas[i]
+          score = -run_and_log(csv, *params, max_runtime)['distance']
+          if score < best_score
+            best_score = score
+            deltas[i] *= 1.1
+          else
+            params[i] += deltas[i]
+            deltas[i] *= 0.9
+          end
+        end
+      end
+    end
+  end
+end
+
+twiddle([0.1, 0.0025, 0.01, 0.3], [0.1, 0.1, 0.1, 0.1], 90, 0.01)
