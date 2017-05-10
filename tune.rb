@@ -7,6 +7,8 @@ require 'tmpdir'
 
 require 'cross_entropy'
 
+TOTAL_ABSOLUTE_CTE_WEIGHT = 2
+
 def run(*args, **options)
   Dir.mktmpdir do |tmp|
     out_pathname = File.join(tmp, 'out')
@@ -59,25 +61,26 @@ end
 def cross_entropy_search(max_runtime)
   # Our initial guess at the optimal solution.
   # This is just a guess, so we give it a large standard deviation.
-  ks = NArray[0.0, 0.0, 0.0, 0.0]
+  ks = NArray[-1.0, -1.0, -1.0, 0.0]
   ks_stddev = NArray[2.0, 2.0, 2.0, 2.0]
 
   # Set up the problem. These are the CEM parameters.
   problem = CrossEntropy::ContinuousProblem.new(ks, ks_stddev)
-  problem.num_samples = 60
-  problem.num_elite = 6
+  problem.num_samples = 120
+  problem.num_elite = 12
   problem.max_iters = 20
 
   CSV(STDOUT) do |csv|
     csv << %w(kp ki kd max_throttle crashed runtime distance total_absolute_cte)
 
-    # Objective function.
+    # Objective function (to be minimized).
     problem.to_score_sample do |params|
       k = params.to_a.take(3).map { |x| Math.exp(x) }
       max_throttle = 1.0 / (1.0 + Math.exp(-params[3]))
       stats = run_and_log(csv, *k, max_throttle, max_runtime)
       if stats
-        -stats['distance']
+        -stats['distance'] +
+          TOTAL_ABSOLUTE_CTE_WEIGHT * stats['total_absolute_cte']
       else
         Float::INFINITY # simulator crashed; bad luck
       end
@@ -95,4 +98,4 @@ def cross_entropy_search(max_runtime)
   end
 end
 
-cross_entropy_search(100)
+cross_entropy_search(60)
