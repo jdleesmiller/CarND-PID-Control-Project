@@ -7,6 +7,21 @@
 const double MIN_CONTROL = -1;
 const double MAX_CONTROL = 1;
 
+// There should also be a maximum rate of change in the steering angle. Based
+// on this paper:
+// https://www.nhtsa.gov/DOT/NHTSA/NRD/Multimedia/PDFs/VRTC/ca/capubs/NHTSA_forkenbrock_driversteeringcapabilityrpt.pdf
+// steering wheel controllers can typically steer at about 1000 steering wheel
+// degrees / second. According to https://en.wikipedia.org/wiki/Steering_ratio,
+// the steering ratio is not usually larger than 12:1 (360 wheel degrees :
+// 30 steering degrees). This gives a peak rate of change of ~33 degrees per
+// second. The simulator timestep is roughly 0.05s, so we should not be changing
+// the steering angle by more than about 1.67 degrees per timestep. In control
+// units, with 25 degrees per control unit, that is 0.0667.
+const double MAX_CONTROL_DELTA = 1000.0 / 30.0 / 25.0 * 0.05;
+
+// Smoothing factor for the exponential moving average mean_steer.
+const double MEAN_STEER_ALPHA = 0.1;
+
 // Wait this long before recording stats, in seconds.
 const double WARMUP = 5;
 
@@ -19,8 +34,11 @@ const double MAX_CTE = 5;
 // 1609.34m / mile * 1h / 3600s = x (m / s) / (miles / h).
 const double MPH_TO_METERS_PER_SECOND = (1609.34 / 3600.0);
 
-PID::PID(bool tuning, double Kp, double Ki, double Kd, double max_throttle)
-  : tuning(tuning), Kp(Kp), Ki(Ki), Kd(Kd), max_throttle(max_throttle) { }
+PID::PID(bool tuning, double Kp, double Ki, double Kd,
+  double min_throttle, double max_throttle, double throttle_angle_threshold)
+  : tuning(tuning), Kp(Kp), Ki(Ki), Kd(Kd),
+    min_throttle(min_throttle), max_throttle(max_throttle),
+    throttle_angle_threshold(throttle_angle_threshold) { }
 
 void PID::Init() {
   p_error = 0;
@@ -32,6 +50,7 @@ void PID::Init() {
   runtime = 0;
   previous_speed = 0;
   distance = 0;
+  mean_steer = 0;
   total_absolute_cte = 0;
 }
 
@@ -52,9 +71,12 @@ void PID::Update(double cte, double speed, double angle) {
     distance += average_speed * dt * MPH_TO_METERS_PER_SECOND;
     previous_speed = speed;
 
-    total_absolute_cte += fabs(cte);
+    total_absolute_cte += fabs((cte + p_error) / 2.0) * dt;
   }
 
+  mean_steer = MEAN_STEER_ALPHA * angle / 25.0 +
+    (1 - MEAN_STEER_ALPHA) * mean_steer;
+  // std::cout << "dt=" << dt << " MS=" << mean_steer << std::endl;
 
   // Update error terms.
   d_error = (cte - p_error) / dt;
@@ -62,15 +84,36 @@ void PID::Update(double cte, double speed, double angle) {
   i_error += cte * dt;
 }
 
-double PID::SteeringAngle() {
-  double control = -(Kp * p_error + Ki * i_error + Kd * d_error);
-  if (control > MAX_CONTROL) {
-    control = MAX_CONTROL;
+double PID::SteeringAngle(double angle) {
+  double old_control = angle / 25.0;
+  double new_control = -(Kp * p_error + Ki * i_error + Kd * d_error);
+
+  double max_control = old_control + MAX_CONTROL_DELTA;
+  double min_control = old_control - MAX_CONTROL_DELTA;
+  if (max_control > MAX_CONTROL) {
+    max_control = MAX_CONTROL;
   }
-  if (control < MIN_CONTROL) {
-    control = MIN_CONTROL;
+  if (min_control < MIN_CONTROL) {
+    max_control = MIN_CONTROL;
   }
-  return control;
+
+  if (new_control > max_control) {
+    new_control = max_control;
+  }
+  if (new_control < min_control) {
+    new_control = min_control;
+  }
+  return new_control;
+}
+
+double PID::Throttle(double speed, double steer_value) {
+  if (speed > 20 &&
+    (fabs(steer_value) - fabs(mean_steer)) > throttle_angle_threshold)
+  {
+    return min_throttle;
+  } else {
+    return max_throttle;
+  }
 }
 
 std::ostream &operator<<(std::ostream &os, const PID &pid) {

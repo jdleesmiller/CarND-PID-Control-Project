@@ -7,7 +7,7 @@ require 'tmpdir'
 
 require 'cross_entropy'
 
-TOTAL_ABSOLUTE_CTE_WEIGHT = 2
+TOTAL_ABSOLUTE_CTE_WEIGHT = 0
 
 def run(*args, **options)
   Dir.mktmpdir do |tmp|
@@ -28,27 +28,32 @@ def run(*args, **options)
   end
 end
 
-def run_and_log(csv, kp, ki, kd, max_throttle, max_runtime)
-  status, out, _err = run(kp, ki, kd, max_throttle, max_runtime)
+def run_and_log(csv, *params, max_runtime )
+  status, out, _err = run(*params, max_runtime)
   if [0, 1].member?(status)
     crashed = status == 1
     stats = JSON.parse(out)
     csv << [
-      kp, ki, kd, max_throttle,
+      *params,
       crashed,
       stats['runtime'], stats['distance'], stats['total_absolute_cte']
     ]
     stats
   else
     # The run failed.
-    csv << [kp, ki, kd, max_throttle]
+    csv << params
     nil
   end
 end
 
+COLUMNS = %w(
+  kp ki kd min_throttle max_throttle throttle_angle_threshold
+  crashed runtime distance total_absolute_cte
+).freeze
+
 def grid(max_runtime)
   CSV(STDOUT) do |csv|
-    csv << %w(kp ki kd crashed runtime distance total_absolute_cte)
+    csv << COLUMNS
     ks = (0..4).map { |k| k / 20.0 }
     ks.product(ks, ks).each do |kp, ki, kd|
       run_and_log(csv, kp, ki, kd, 0.3, max_runtime)
@@ -61,23 +66,24 @@ end
 def cross_entropy_search(max_runtime)
   # Our initial guess at the optimal solution.
   # This is just a guess, so we give it a large standard deviation.
-  ks = NArray[-1.0, -1.0, -1.0, 0.0]
-  ks_stddev = NArray[2.0, 2.0, 2.0, 2.0]
+  ks = NArray[-2, -2, -2, 0.0, 0.0]
+  ks_stddev = NArray[0.5, 0.5, 0.5, 1.0, 1.0]
 
   # Set up the problem. These are the CEM parameters.
   problem = CrossEntropy::ContinuousProblem.new(ks, ks_stddev)
-  problem.num_samples = 120
-  problem.num_elite = 12
-  problem.max_iters = 20
+  problem.num_samples = 60
+  problem.num_elite = 10
+  problem.max_iters = 30
 
   CSV(STDOUT) do |csv|
-    csv << %w(kp ki kd max_throttle crashed runtime distance total_absolute_cte)
+    csv << COLUMNS
 
     # Objective function (to be minimized).
     problem.to_score_sample do |params|
-      k = params.to_a.take(3).map { |x| Math.exp(x) }
-      max_throttle = 1.0 / (1.0 + Math.exp(-params[3]))
-      stats = run_and_log(csv, *k, max_throttle, max_runtime)
+      k = NMath.exp(params[0...3]).to_a
+      throttle = (NArray[1, 1] / (1.0 + NMath.exp(-params[3...5]))).to_a
+      throttle = [-throttle[0]] + throttle # fix min_throttle = -max_throttle
+      stats = run_and_log(csv, *k, *throttle, max_runtime)
       if stats
         -stats['distance'] +
           TOTAL_ABSOLUTE_CTE_WEIGHT * stats['total_absolute_cte']
@@ -86,11 +92,16 @@ def cross_entropy_search(max_runtime)
       end
     end
 
+    # Do some smoothing when updating the parameters based on new samples.
+    # This isn't strictly required, but I find it often helps convergence.
     # Log the results
+    smooth = 0.2
     problem.to_update do |new_mean, new_stddev|
       STDERR.puts new_mean.inspect
       STDERR.puts new_stddev.inspect
-      [new_mean, new_stddev]
+      smooth_mean = smooth * new_mean + (1 - smooth) * problem.param_mean
+      smooth_stddev = smooth * new_stddev + (1 - smooth) * problem.param_stddev
+      [smooth_mean, smooth_stddev]
     end
 
     problem.solve
@@ -98,12 +109,13 @@ def cross_entropy_search(max_runtime)
   end
 end
 
-# cross_entropy_search(60)
+cross_entropy_search(90)
+exit
 
 def twiddle(params, deltas, max_runtime, tolerance)
   param_indexes = 0...(params.size)
   CSV(STDOUT) do |csv|
-    csv << %w(kp ki kd max_throttle crashed runtime distance total_absolute_cte)
+    csv << COLUMNS
     best_score = -run_and_log(csv, *params, max_runtime)['distance']
     while deltas.sum > tolerance
       param_indexes.each do |i|
@@ -128,4 +140,8 @@ def twiddle(params, deltas, max_runtime, tolerance)
   end
 end
 
-twiddle([0.1, 0.0025, 0.01, 0.3], [0.1, 0.1, 0.1, 0.1], 90, 0.01)
+# twiddle(
+#   [0.1, 0.0025, 0.01, -0.3, 0.3, 0.0],
+#   [0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1],
+#   90, 0.01
+# )

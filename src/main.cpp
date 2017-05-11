@@ -44,25 +44,32 @@ int main(int argc, char **argv)
   double Kp;
   double Ki;
   double Kd;
+  double min_throttle;
   double max_throttle;
+  double throttle_angle_threshold;
   double max_runtime;
 
-  if (argc == 6) {
+  if (argc == 8) {
     tuning = true;
     Kp = atof(argv[1]);
     Ki = atof(argv[2]);
     Kd = atof(argv[3]);
-    max_throttle = atof(argv[4]);
-    max_runtime = atof(argv[5]);
+    min_throttle = atof(argv[4]);
+    max_throttle = atof(argv[5]);
+    throttle_angle_threshold = atof(argv[6]);
+    max_runtime = atof(argv[7]);
   } else {
     tuning = false;
     Kp = 0.1;
     Ki = 0.0025;
-    Kd = 0.01;
+    Kd = 0.11;
+    min_throttle = 0.3;
     max_throttle = 0.3;
+    throttle_angle_threshold = 0;
     max_runtime = 3600;
   }
-  PID pid(tuning, Kp, Ki, Kd, max_throttle);
+  PID pid(tuning, Kp, Ki, Kd, min_throttle, max_throttle,
+    throttle_angle_threshold);
 
   h.onMessage([&reset, max_runtime, &pid](
     uWS::WebSocket<uWS::SERVER> ws, char *data, size_t length,
@@ -113,16 +120,17 @@ int main(int argc, char **argv)
           * another PID controller to control the speed!
           */
 
-          double steer_value = pid.SteeringAngle();
+          double steer_value = pid.SteeringAngle(angle);
+          double throttle = pid.Throttle(speed, steer_value);
 
           if (!pid.tuning) {
             std::cout << "CTE: " << cte << " Steering Value: " << steer_value
-              << " Speed: " << speed << std::endl;
+              << " Speed: " << speed << " Throttle: " << throttle << std::endl;
           }
 
           json msgJson;
           msgJson["steering_angle"] = steer_value;
-          msgJson["throttle"] = pid.max_throttle;
+          msgJson["throttle"] = throttle;
           auto msg = "42[\"steer\"," + msgJson.dump() + "]";
           ws.send(msg.data(), msg.length(), uWS::OpCode::TEXT);
         }

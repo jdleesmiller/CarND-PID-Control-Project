@@ -299,6 +299,35 @@ NArray.float(4):
 tune_twiddle_8.csv, tune_twiddle_9.csv:
 Two runs with twiddle. Interesting that they both found different solutions, and they are quite different to the CEM solutions.
 
+tune_cem_11.csv:
+First run with min and max throttles with exponential moving average.
+CEM tuned both min and max throttle separately, which didn't seem to help.
+No smoothing on CEM results. N = 120, elite = 12, t_max = 60 (a bit short)
+NArray.float(6):
+[ -2.11816, -1.88413, -1.10447, -0.232531, 0.500492, 0.665623 ]
+NArray.float(6):
+[ 0.88442, 0.827263, 0.684809, 0.844443, 0.84176, 1.15013 ]
+NArray.float(6):
+[ -2.33281, -2.08004, -1.41746, -0.18886, 0.237095, 0.800871 ]
+NArray.float(6):
+[ 0.675201, 0.575777, 0.428933, 1.05459, 0.729313, 1.20514 ]
+NArray.float(6):
+[ -2.59056, -2.28561, -1.56446, -0.000729511, -0.0172768, 1.27886 ]
+NArray.float(6):
+[ 0.561806, 0.51091, 0.303861, 0.954106, 0.418875, 0.456055 ]
+NArray.float(6):
+[ -2.60145, -2.47602, -1.73232, -0.3625, -0.165377, 1.37039 ]
+NArray.float(6):
+[ 0.313571, 0.469872, 0.120917, 0.666983, 0.417958, 0.335134 ]
+NArray.float(6):
+[ -2.65125, -2.58082, -1.84907, -0.182244, -0.032772, 1.37759 ]
+NArray.float(6):
+[ 0.216244, 0.303274, 0.125881, 0.562359, 0.242729, 0.213788 ]
+NArray.float(6):
+[ -2.83302, -2.74293, -1.84688, -0.268395, -0.025091, 1.31935 ]
+NArray.float(6):
+[ 0.172985, 0.164259, 0.144479, 0.309556, 0.173973, 0.147136 ]
+
 ## Dependencies
 
 * cmake >= 3.5
