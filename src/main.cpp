@@ -46,18 +46,20 @@ int main(int argc, char **argv)
   double Kd;
   double min_throttle;
   double max_throttle;
-  double throttle_angle_threshold;
+  double mean_steer_delay;
+  double throttle_steer_threshold;
   double max_runtime;
 
-  if (argc == 8) {
+  if (argc == 9) {
     tuning = true;
     Kp = atof(argv[1]);
     Ki = atof(argv[2]);
     Kd = atof(argv[3]);
     min_throttle = atof(argv[4]);
     max_throttle = atof(argv[5]);
-    throttle_angle_threshold = atof(argv[6]);
-    max_runtime = atof(argv[7]);
+    mean_steer_delay = atof(argv[6]);
+    throttle_steer_threshold = atof(argv[7]);
+    max_runtime = atof(argv[8]);
   } else {
     tuning = false;
     Kp = 0.1;
@@ -65,11 +67,12 @@ int main(int argc, char **argv)
     Kd = 0.11;
     min_throttle = 0.3;
     max_throttle = 0.3;
-    throttle_angle_threshold = 0;
+    mean_steer_delay = 0.1;
+    throttle_steer_threshold = 0;
     max_runtime = 3600;
   }
-  PID pid(tuning, Kp, Ki, Kd, min_throttle, max_throttle,
-    throttle_angle_threshold);
+  PID pid(tuning, Kp, Ki, Kd, min_throttle, max_throttle, mean_steer_delay,
+    throttle_steer_threshold);
 
   h.onMessage([&reset, max_runtime, &pid](
     uWS::WebSocket<uWS::SERVER> ws, char *data, size_t length,
@@ -98,7 +101,7 @@ int main(int argc, char **argv)
           double angle = std::stod(j[1]["steering_angle"].get<std::string>());
 
           // Update the PID controller.
-          pid.Update(cte, speed, angle);
+          pid.Update(cte, speed);
 
           // If the controller thinks it has crashed the car, terminate the
           // simulator.

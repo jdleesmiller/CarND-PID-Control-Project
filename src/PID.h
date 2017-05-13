@@ -22,13 +22,17 @@ public:
   double Kd;
   double min_throttle;
   double max_throttle;
-  double throttle_angle_threshold;
+  double mean_steer_delay;
+  double throttle_steer_threshold;
 
   // Time of last Init.
   std::chrono::steady_clock::time_point t_init;
 
   // Time of last update, or time of last Init on first measurement.
   std::chrono::steady_clock::time_point t;
+
+  // Time from last update to current update.
+  double dt;
 
   // Exponential moving average of recent steering values used for throttle
   // control.
@@ -53,7 +57,8 @@ public:
   * Constructor
   */
   PID(bool tuning, double Kp, double Ki, double Kd,
-    double min_throttle, double max_throttle, double throttle_angle_threshold);
+    double min_throttle, double max_throttle, double mean_steer_delay,
+    double throttle_steer_threshold);
 
   /*
   * Initialize PID.
@@ -63,7 +68,7 @@ public:
   /*
   * Update the PID error variables given cross track error.
   */
-  void Update(double cte, double speed, double angle);
+  void Update(double cte, double speed);
 
   /*
   * Calculate the steering angle control output.

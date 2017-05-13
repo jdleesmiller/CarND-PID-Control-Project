@@ -19,9 +19,6 @@ const double MAX_CONTROL = 1;
 // units, with 25 degrees per control unit, that is 0.0667.
 const double MAX_CONTROL_DELTA = 1000.0 / 30.0 / 25.0 * 0.05;
 
-// Smoothing factor for the exponential moving average mean_steer.
-const double MEAN_STEER_ALPHA = 0.1;
-
 // Wait this long before recording stats, in seconds.
 const double WARMUP = 5;
 
@@ -35,10 +32,12 @@ const double MAX_CTE = 4.5;
 const double MPH_TO_METERS_PER_SECOND = (1609.34 / 3600.0);
 
 PID::PID(bool tuning, double Kp, double Ki, double Kd,
-  double min_throttle, double max_throttle, double throttle_angle_threshold)
+  double min_throttle, double max_throttle,
+  double mean_steer_delay, double throttle_steer_threshold)
   : tuning(tuning), Kp(Kp), Ki(Ki), Kd(Kd),
     min_throttle(min_throttle), max_throttle(max_throttle),
-    throttle_angle_threshold(throttle_angle_threshold) { }
+    mean_steer_delay(mean_steer_delay),
+    throttle_steer_threshold(throttle_steer_threshold) { }
 
 void PID::Init() {
   p_error = 0;
@@ -46,6 +45,7 @@ void PID::Init() {
   d_error = 0;
   t_init = std::chrono::steady_clock::now();
   t = t_init;
+  dt = 0;
   crashed = false;
   runtime = 0;
   previous_speed = 0;
@@ -54,10 +54,10 @@ void PID::Init() {
   total_absolute_cte = 0;
 }
 
-void PID::Update(double cte, double speed, double angle) {
+void PID::Update(double cte, double speed) {
   auto new_t = std::chrono::steady_clock::now();
   std::chrono::duration<double> dt_duration = new_t - t;
-  double dt = dt_duration.count();
+  dt = dt_duration.count();
   t = new_t;
 
   if (tuning) {
@@ -73,10 +73,6 @@ void PID::Update(double cte, double speed, double angle) {
 
     total_absolute_cte += fabs((cte + p_error) / 2.0) * dt;
   }
-
-  mean_steer = MEAN_STEER_ALPHA * angle / 25.0 +
-    (1 - MEAN_STEER_ALPHA) * mean_steer;
-  // std::cout << "dt=" << dt << " MS=" << mean_steer << std::endl;
 
   // Update error terms.
   d_error = (cte - p_error) / dt;
@@ -107,8 +103,11 @@ double PID::SteeringAngle(double angle) {
 }
 
 double PID::Throttle(double speed, double steer_value) {
+  double weight = 1 - exp(-dt / mean_steer_delay);
+  mean_steer = weight * steer_value + (1 - weight) * mean_steer;
+
   if (speed > 20 &&
-    (fabs(steer_value) - fabs(mean_steer)) > throttle_angle_threshold)
+    fabs(steer_value) > fabs(mean_steer) + throttle_steer_threshold)
   {
     return min_throttle;
   } else {
