@@ -49,7 +49,7 @@ def run_and_log(csv, *params, max_runtime)
 end
 
 COLUMNS = %w(
-  kp ki kd min_throttle max_throttle throttle_angle_threshold
+  kp ki kd min_throttle max_throttle mean_steer_delay throttle_steer_threshold
   crashed runtime distance total_absolute_cte
 ).freeze
 
@@ -65,7 +65,7 @@ end
 
 # grid(60)
 
-def cross_entropy_search(max_runtime)
+def cross_entropy_search(throttle, max_runtime)
   # Our initial guess at the optimal solution.
   # This is just a guess, so we give it a large standard deviation.
   ks = NArray[-2, -2, -2, 0.0, 0.0]
@@ -169,12 +169,13 @@ end
 
 def staged_cross_entropy(max_runtime)
   # Our initial guess at the optimal solution.
-  # This is just a guess, so we give it a large standard deviation.
-  ks = NMath.log(NArray[0.07, 0.001, 0.04])
-  ks_stddev = NArray[0.1, 0.1, 0.1]
-  initial_params = NArray[*(ks.to_a + [-1])]
-  initial_stddev = NArray[*(ks_stddev.to_a + [0.5])]
-  throttle = 0.45
+  #ks = NMath.log(NArray[0.07, 0.001, 0.04])
+  #ks_stddev = NArray[0.2, 0.2, 0.2]
+  #initial_params = NArray[*(ks.to_a + [-2, -2])]
+  #initial_stddev = NArray[*(ks_stddev.to_a + [0.5, 0.5])]
+  initial_params = NArray[ -2.52046, -6.97938, -3.1024, -1.42986, -2.12784 ]
+  initial_stddev = NArray[ 0.06, 0.35, 0.14, 0.48, 0.19 ]
+  throttle = 0.7
   throttle_delta = 0.05
 
   CSV(STDOUT) do |csv|
@@ -185,17 +186,28 @@ def staged_cross_entropy(max_runtime)
       problem = CrossEntropy::ContinuousProblem.new(
         initial_params, initial_stddev.dup
       )
-      problem.num_samples = 60
-      problem.num_elite = 6
-      problem.max_iters = 8
+      problem.num_samples = 100
+      problem.num_elite = 10
+      problem.max_iters = 10
 
       # Objective function (to be minimized).
       problem.to_score_sample do |params|
-        k = NMath.exp(params[0...3]).to_a
-        throttle_angle_threshold = 1.0 / (1.0 + Math.exp(-params[3]))
-        run_and_log(
-          csv, *k, -throttle, throttle, throttle_angle_threshold, max_runtime
-        )
+        # The exp shifts the mean gain depending on the variance, because the
+        # mean of a lognormal is exp(mu + var/2); we change the variance between
+        # iterations, so it's important to make the gains independent of the
+        # CEM variance.
+        k_adjustment = problem.param_stddev[0...3]**2 / 2.0
+        k = NMath.exp(params[0...3] - k_adjustment).to_a
+
+        # Similarly, the sigmoid shifts the mean depending on the variance. The
+        # adjustment, which is approximately valid for small sigma, is based on
+        # https://math.stackexchange.com/questions/207861
+        # Probably I should use a beta distribution here instead.
+        st = NArray[1.0, 1.0] / (1.0 + NMath.exp(-params[3...5]))
+        ep = NMath.exp(-problem.param_mean[3...5])
+        es = problem.param_stddev[3...5]
+        st -= (ep - 1) * ep / 2 / (ep + 1)**3 * es**2
+        run_and_log(csv, *k, -throttle, throttle, *st, max_runtime)
       end
 
       # Do some smoothing when updating the parameters based on new samples.
