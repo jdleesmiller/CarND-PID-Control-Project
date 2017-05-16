@@ -26,7 +26,7 @@ For example, if we'd turned 0.3 degrees per timestep on average over the last 0.
 This gives four additional tunable parameters:
 
 1. The maximum acceleration throttle
-1. The maximum braking throttle
+1. The minimum acceleration (that is, maximum braking) throttle
 1. The time constant for the exponential moving average
 1. The absolute steering angle threshold beyond which to brake
 
@@ -59,9 +59,9 @@ The [Cross Entropy Method](https://en.wikipedia.org/wiki/Cross-entropy_method). 
 1. scores them according to the objective function, and
 1. uses the lowest-scoring samples (if we want to minimize the objective function, in this case negative distance) to update the parameters of the probability distribution.
 
-This process repeats for each 'generation'. It is relatively resistant to randomness in the objective function, because it averages over a (configurable) number of samples in each generation.
+This process repeats for each 'generation'. It is relatively resistant to randomness in the objective function, because it averages over a (configurable) number of samples in each generation. I used an implementation of the CEM that I wrote a few years ago: https://github.com/jdleesmiller/cross_entropy
 
-It seemed to be resistant to getting stuck in local minima, but it did take a lot of objective function evaluations. The final tuning run, `tune_staged_cem_16.csv`, ran 2476 simulations over almost 46h.
+The CEM seemed to be more resistant to getting stuck in local minima than Twiddle, but it did take a lot of objective function evaluations. My final tuning run, `tune_staged_cem_16.csv`, ran 2476 simulations over almost 46h.
 
 It also exhibited some "risk seeking" behavior: if a set of parameters often resulted in fast laps (that is, long distances) but sometimes crashed spectacularly, that set of parameters would often make it into the 'elite' samples that seeded the next generation. It therefore tended to select for dangerous driving.
 
@@ -110,49 +110,56 @@ NArray.float(5):
 [ 0.0535792, 0.189626, 0.0360106, 0.212486, 0.126516 ]
 ```
 
-Overall, the standard deviations decreased, but interestingly variances remained quite high for the `ki` coefficient (second number) and the mean steering angle time constant (fourth number), indicating that the objective (negative distance travelled) was not very sensitive to changes in these parameters. With further generations, the variances may nevertheless have decreased, but I am already late handing this in.
+Overall, the standard deviations decreased, indicating convergence, but interestingly they remained quite high for the `ki` coefficient (second number) and the mean steering angle time constant (fourth number), indicating that the objective (negative distance travelled) was not very sensitive to changes in these parameters. With further generations, the variances may nevertheless have decreased, but I am already late handing this in.
 
-For submission, I used the `tune.R` script to pick the parameters with the lowest absolute cross track error of all of the parameters tested during the CEM run, even though that was not what we were optimizing, because we just want to get around the track. These are the 'timid' parameters. I also included a set of 'aggressive' parameters that seem to work well, for reference, but they are commented out. The top results by both criteria were:
+For submission, I used the `tune.R` script to pick the parameters with the lowest absolute cross track error of all of the parameters tested during the last generation of the CEM run, even though that was not what we were optimizing, because we just want to get around the track. These are the 'timid' parameters. I also included a set of 'aggressive' parameters that seem to work well, for reference, but they are commented out. The top results (in the last generation) by both criteria were:
 
 ```
 > head(dOK[order(dOK$total_absolute_cte),]) # "timid"
-          kp          ki         kd min_throttle max_throttle mean_steer_delay
-50 0.1176472 0.001866657 0.05088915         -0.6          0.6        0.1314941
-61 0.1221834 0.002077239 0.04451648         -0.6          0.6        0.1643727
-47 0.1130611 0.002054426 0.05268848         -0.6          0.6        0.1915785
-14 0.1108151 0.002430898 0.03739932         -0.6          0.6        0.1366351
-1  0.1144405 0.001905917 0.03472955         -0.6          0.6        0.1345194
-28 0.1031711 0.002001099 0.04483198         -0.6          0.6        0.1889838
-   throttle_steer_threshold crashed distance total_absolute_cte
-50               0.06158919       0 1751.320           55.89203
-61               0.06356595       0 1713.965           55.90410
-47               0.06135111       0 1621.938           56.15620
-14               0.04928322       0 1714.315           57.07780
-1                0.03203247       0 1485.165           57.29488
-28               0.05539879       0 1653.582           58.63145
+    sample         kp          ki         kd min_throttle max_throttle
+54     505 0.09246630 0.002171082 0.04401599         -0.6          0.6
+76     544 0.08933176 0.001965898 0.04393657         -0.6          0.6
+25     510 0.08131531 0.002600238 0.05222758         -0.6          0.6
+116    547 0.09152920 0.002148535 0.04935019         -0.6          0.6
+181    565 0.08996727 0.002037377 0.04472419         -0.6          0.6
+168    538 0.09236225 0.001952292 0.04239050         -0.6          0.6
+    mean_steer_delay throttle_steer_threshold crashed distance
+54         0.1289787               0.06207176       0 1880.010
+76         0.1895262               0.06517804       0 1804.503
+25         0.1801097               0.05428013       0 1666.625
+116        0.1222209               0.07132404       0 1954.375
+181        0.1390824               0.07819560       0 2028.765
+168        0.1390268               0.07761368       0 2018.675
+    total_absolute_cte
+54            64.94090
+76            66.64975
+25            67.92565
+116           72.62713
+181           73.71360
+168           73.94333
 
 > head(dOK[order(-dOK$distance),]) # "aggressive"
-            kp          ki         kd min_throttle max_throttle
-210 0.08599790 0.002062849 0.04231535         -0.6          0.6
-163 0.08572948 0.002378438 0.04328169         -0.6          0.6
-365 0.07936167 0.002124203 0.04551714         -0.6          0.6
-445 0.08659201 0.001738781 0.04220805         -0.6          0.6
-185 0.07795582 0.002041901 0.04254738         -0.6          0.6
-246 0.07864267 0.001577405 0.04273478         -0.6          0.6
+    sample         kp          ki         kd min_throttle max_throttle
+365    579 0.07936167 0.002124203 0.04551714         -0.6          0.6
+185    540 0.07795582 0.002041901 0.04254738         -0.6          0.6
+246    599 0.07864267 0.001577405 0.04273478         -0.6          0.6
+444    594 0.08341730 0.002869982 0.04197861         -0.6          0.6
+394    513 0.08914621 0.002095229 0.04618493         -0.6          0.6
+345    533 0.08575644 0.002544331 0.04152967         -0.6          0.6
     mean_steer_delay throttle_steer_threshold crashed distance
-210       0.07998659               0.08087203       0 2300.655
-163       0.07464225               0.07709992       0 2295.523
 365       0.11048628               0.09574146       0 2290.510
-445       0.13621108               0.10657679       0 2286.017
 185       0.08874864               0.07867998       0 2268.062
 246       0.09872981               0.08389212       0 2265.740
+444       0.14918138               0.10636313       0 2250.150
+394       0.11755371               0.09923922       0 2244.012
+345       0.11461219               0.09360496       0 2243.812
     total_absolute_cte
-210           83.15967
-163           80.33022
 365           82.00758
-445           82.00487
 185           81.27893
 246           83.19930
+444           80.31198
+394           82.12273
+345           80.51510
 ```
 
 ### Describe the effect each of the P, I, D components had in your implementation
@@ -165,9 +172,9 @@ For submission, I used the `tune.R` script to pick the parameters with the lowes
 
 It is interesting to compare the timid and aggressive parameters from above:
 
-- The timid parameters have higher P and D gains (~0.11 and ~0.05, respectively), leading to tighter tracking but also more steering and therefore lower speed. They also have lower `throttle_steer_threshold`s, which means that they brake earlier in turns (and on less steep turns).
+- The timid parameters have higher P gain (~0.09), leading to tighter tracking but also more steering and therefore lower speed. They also have lower `throttle_steer_threshold`s, which means that they brake earlier in turns (and on less steep turns).
 
-- The aggressive parameters have lower P and D gains (~0.08 and ~0.04 respectively), leading to looser tracking but also less steering and generally higher speeds. They also have higher `throttle_steer_threshold`, which means that they brake less.
+- The aggressive parameters have lower P gain (~0.08), leading to looser tracking but also less steering and generally higher speeds. They also have higher `throttle_steer_threshold`, which means that they brake less.
 
 ## Dependencies
 
