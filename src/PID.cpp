@@ -15,8 +15,8 @@ const double MAX_CONTROL = 1;
 // the steering ratio is not usually larger than 12:1 (360 wheel degrees :
 // 30 steering degrees). This gives a peak rate of change of ~33 degrees per
 // second. The simulator timestep is roughly 0.05s, so we should not be changing
-// the steering angle by more than about 1.67 degrees per timestep. In control
-// units, with 25 degrees per control unit, that is 0.0667.
+// the steering angle by no more than about 1.67 degrees per timestep. In
+// control units, with 25 degrees per control unit, that is 0.0667.
 const double MAX_CONTROL_DELTA = 1000.0 / 30.0 / 25.0 * 0.05;
 
 // Wait this long before recording stats, in seconds.
