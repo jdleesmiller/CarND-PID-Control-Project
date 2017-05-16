@@ -62,13 +62,22 @@ int main(int argc, char **argv)
     max_runtime = atof(argv[8]);
   } else {
     tuning = false;
-    Kp = 0.09094036;
-    Ki = 0.002433969;
-    Kd = 0.04378667;
-    min_throttle = -0.7;
-    max_throttle = 0.7;
-    mean_steer_delay = 0.1820204;
-    throttle_steer_threshold = 0.08784223;
+    // timid:
+    Kp = 0.1176472;
+    Ki = 0.001866657;
+    Kd = 0.05088915;
+    min_throttle = -0.6;
+    max_throttle = 0.6;
+    mean_steer_delay = 0.1314941;
+    throttle_steer_threshold = 0.06158919;
+    // aggressive:
+    // Kp = 0.07936167;
+    // Ki = 0.002124203;
+    // Kd = 0.04551714;
+    // min_throttle = -0.6;
+    // max_throttle = 0.6;
+    // mean_steer_delay = 0.13621108;
+    // throttle_steer_threshold = 0.10657679;
     max_runtime = 24 * 3600;
   }
   PID pid(tuning, Kp, Ki, Kd, min_throttle, max_throttle, mean_steer_delay,
